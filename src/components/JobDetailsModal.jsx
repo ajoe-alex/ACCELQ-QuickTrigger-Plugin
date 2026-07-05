@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CloseIcon, CopyIcon, EyeIcon, EyeOffIcon, ChevronRightIcon } from './Icons'
 import { formatDateTime, maskSecret } from '../utils/format'
+import { buildTriggerRequest } from '../utils/api'
+import { buildCurlCommand } from '../utils/curl'
 import RunSummary, { TriggerResultCard } from './RunSummary'
 
 function CopyButton({ text }) {
@@ -88,6 +90,25 @@ function RequestLine({ request }) {
   return <p className="text-[12px] font-mono text-slate-500 break-all">{request.method} {request.url}</p>
 }
 
+function CurlBlock({ tile, revealSecrets }) {
+  const request = buildTriggerRequest(tile)
+  const fullCurl = buildCurlCommand(request)
+  const displayHeaders = { ...request.headers }
+  if (displayHeaders.api_key) displayHeaders.api_key = maskSecret(displayHeaders.api_key, revealSecrets)
+  const displayCurl = buildCurlCommand({ ...request, headers: displayHeaders })
+
+  return (
+    <div className="relative rounded-lg bg-slate-900 dark:bg-black/40 border border-slate-800">
+      <div className="absolute top-1.5 right-2">
+        <CopyButton text={fullCurl} />
+      </div>
+      <pre className="text-[12px] text-emerald-300/90 p-3 pr-16 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all">
+        {displayCurl}
+      </pre>
+    </div>
+  )
+}
+
 function StatusPill({ ok, status, statusText }) {
   const tone = ok
     ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900'
@@ -143,6 +164,10 @@ export default function JobDetailsModal({ tile, onClose }) {
               <ConfigRow label="Poll Frequency" value={`${tile.pollFrequency}s`} />
               <ConfigRow label="Created" value={formatDateTime(tile.createdAt)} />
             </dl>
+          </Section>
+
+          <Section title="Trigger Job cURL">
+            <CurlBlock tile={tile} revealSecrets={revealSecrets} />
           </Section>
 
           {!lastRun && (

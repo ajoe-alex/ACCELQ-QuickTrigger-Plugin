@@ -67,6 +67,18 @@ export function parseCurlCommand(curlText) {
   return { method: method || 'GET', url, headers, body }
 }
 
+export function buildCurlCommand({ method, url, headers = {}, body }) {
+  const parts = [`curl -X ${method}`]
+  Object.entries(headers).forEach(([key, value]) => {
+    parts.push(`-H '${key}: ${value}'`)
+  })
+  if (body) {
+    parts.push(`-d '${typeof body === 'string' ? body : JSON.stringify(body)}'`)
+  }
+  parts.push(`'${url}'`)
+  return parts.join(' \\\n  ')
+}
+
 const TRIGGER_PATH_RE = /^\/awb\/api\/[\d.]+\/([^/]+)\/([^/]+)\/test-exec\/jobs\/templates\/([^/]+)\/run\/?$/i
 const RUNS_PATH_RE = /^\/awb\/api\/[\d.]+\/([^/]+)\/runs\/([^/]+)\/?$/i
 
