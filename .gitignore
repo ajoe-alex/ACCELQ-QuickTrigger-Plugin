@@ -1,0 +1,6 @@
+node_modules
+plugin_assets
+plugin/build
+plugin/dist
+.DS_Store
+*.log
