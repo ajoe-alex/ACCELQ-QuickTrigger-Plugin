@@ -4,3 +4,4 @@ plugin/build
 plugin/dist
 .DS_Store
 *.log
+.claude/
