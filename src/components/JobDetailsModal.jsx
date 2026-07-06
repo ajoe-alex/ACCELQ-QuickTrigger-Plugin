@@ -198,6 +198,10 @@ export default function JobDetailsModal({ tile, onClose, onRun, onStopJob, onRes
               {tile.label || tile.projectName}
             </h2>
             <p className="text-xs text-slate-400">{tile.tenantCode} / {tile.projectName} · Template {tile.templateJobId}</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] text-slate-400 font-mono" title={tile.id}>ID: {tile.id}</span>
+              <CopyButton text={tile.id} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -218,6 +222,7 @@ export default function JobDetailsModal({ tile, onClose, onRun, onStopJob, onRes
           {/* Tile Config */}
           <Section title="Tile Configuration">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <ConfigRow label="Tile ID" value={tile.id} mono />
               <ConfigRow label="Base URL" value={tile.baseUrl} />
               <ConfigRow label="Tenant Code" value={tile.tenantCode} />
               <ConfigRow label="Project Name" value={tile.projectName} />

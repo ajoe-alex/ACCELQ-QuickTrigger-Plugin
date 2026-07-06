@@ -48,6 +48,9 @@ export default function TileCard({ tile, jobCounts, onRun, onEdit, onDelete, onO
             {tile.label || tile.projectName}
           </h3>
           <p className="text-xs text-slate-400 truncate">{tile.tenantCode} / {tile.projectName}</p>
+          <p className="text-[10px] text-slate-400/70 font-mono truncate mt-0.5" title={tile.id}>
+            ID: {tile.id}
+          </p>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button onClick={stop(() => onEdit(tile))} className="p-1.5 rounded-md text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40" title="Edit tile">

@@ -12,8 +12,8 @@ export const DEFAULT_TILE_VALUES = {
   pollFrequency: 10,
 }
 
-function makeId(prefix = 'tile') {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+function makeUUID() {
+  return crypto.randomUUID()
 }
 
 // Status categories for counting
@@ -137,7 +137,7 @@ export function useTiles() {
 
   const addTile = useCallback((tileData) => {
     const tile = {
-      id: makeId('tile'),
+      id: makeUUID(),
       createdAt: Date.now(),
       jobs: [],
       ...tileData,
@@ -149,7 +149,7 @@ export function useTiles() {
   // Import a tile - preserves ID if provided, used for import functionality
   const importTile = useCallback((tileData, preserveId = false) => {
     const tile = {
-      id: preserveId && tileData.id ? tileData.id : makeId('tile'),
+      id: preserveId && tileData.id ? tileData.id : makeUUID(),
       createdAt: tileData.createdAt || Date.now(),
       jobs: [],
       label: tileData.label,
@@ -194,7 +194,7 @@ export function useTiles() {
       const tile = tilesRef.current.find((t) => t.id === tileId)
       if (!tile) return
 
-      const jobId = makeId('job')
+      const jobId = makeUUID()
       const startedAt = Date.now()
 
       // Add a new job to the jobs array
