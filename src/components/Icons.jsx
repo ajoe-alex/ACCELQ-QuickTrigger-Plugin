@@ -90,3 +90,39 @@ export function ChevronRightIcon(props) {
     </svg>
   )
 }
+
+export function ChevronDownIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={base} {...props}>
+      <path d="M4.5 7.5 10 13l5.5-5.5" />
+    </svg>
+  )
+}
+
+export function HistoryIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={base} {...props}>
+      <path d="M3 10a7 7 0 1 1 1.5 4.3" />
+      <path d="M3 14.5V10h4" />
+      <path d="M10 6v4l2.5 1.5" />
+    </svg>
+  )
+}
+
+export function DownloadIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={base} {...props}>
+      <path d="M10 3v10M6 9l4 4 4-4" />
+      <path d="M3 14v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
+    </svg>
+  )
+}
+
+export function UploadIcon(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={base} {...props}>
+      <path d="M10 13V3M6 7l4-4 4 4" />
+      <path d="M3 14v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
+    </svg>
+  )
+}

@@ -1,35 +1,32 @@
 import { useState } from 'react'
-import { getStatusStyle } from '../utils/statusStyles'
 import { formatRelative } from '../utils/format'
-import { PlayIcon, StopIcon, RefreshIcon, EditIcon, TrashIcon, ChevronRightIcon } from './Icons'
+import { PlayIcon, EditIcon, TrashIcon, ChevronRightIcon } from './Icons'
 
-function StatCounter({ label, value, tone }) {
+function JobCountBadge({ label, count, color }) {
+  if (count === 0) return null
   return (
-    <div className="flex flex-col items-center px-2">
-      <span className={`text-sm font-semibold ${tone}`}>{value ?? '—'}</span>
-      <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${color}`}>
+      <span className="text-xs font-semibold">{count}</span>
+      <span className="text-[10px] uppercase tracking-wide opacity-70">{label}</span>
     </div>
   )
 }
 
-export default function TileCard({ tile, onRun, onStop, onResume, onRefresh, onEdit, onDelete, onOpenDetails, onChangePollFrequency }) {
+export default function TileCard({ tile, jobCounts, onRun, onEdit, onDelete, onOpenDetails, onChangePollFrequency }) {
   const [freqDraft, setFreqDraft] = useState(tile.pollFrequency)
-  const lastRun = tile.lastRun
-  const isBusy = lastRun?.status === 'triggering'
-  const isPolling = !!lastRun?.polling
-  const style = getStatusStyle(lastRun?.rawStatus, lastRun?.status)
+  const [isTriggering, setIsTriggering] = useState(false)
+
+  const latestJob = tile.jobs?.[0]
 
   const stop = (fn) => (e) => {
     e.stopPropagation()
     fn?.()
   }
 
-  const statusLabel = () => {
-    if (!lastRun) return 'Not run yet'
-    if (lastRun.status === 'triggering') return 'Triggering…'
-    if (lastRun.status === 'trigger_error') return 'Trigger failed'
-    if (lastRun.status === 'poll_error') return 'Status check failed'
-    return lastRun.rawStatus || 'Pending'
+  const handleRun = async () => {
+    setIsTriggering(true)
+    await onRun(tile)
+    setIsTriggering(false)
   }
 
   const commitFreq = () => {
@@ -37,6 +34,8 @@ export default function TileCard({ tile, onRun, onStop, onResume, onRefresh, onE
     setFreqDraft(val)
     if (val !== tile.pollFrequency) onChangePollFrequency(val)
   }
+
+  const lastActivity = latestJob?.lastUpdatedAt || tile.createdAt
 
   return (
     <div
@@ -49,6 +48,9 @@ export default function TileCard({ tile, onRun, onStop, onResume, onRefresh, onE
             {tile.label || tile.projectName}
           </h3>
           <p className="text-xs text-slate-400 truncate">{tile.tenantCode} / {tile.projectName}</p>
+          <p className="text-[10px] text-slate-400/70 font-mono truncate mt-0.5" title={tile.id}>
+            ID: {tile.id}
+          </p>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button onClick={stop(() => onEdit(tile))} className="p-1.5 rounded-md text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40" title="Edit tile">
@@ -64,76 +66,40 @@ export default function TileCard({ tile, onRun, onStop, onResume, onRefresh, onE
         <InfoRow label="Base URL" value={tile.baseUrl} />
         <InfoRow label="Template Job ID" value={tile.templateJobId} />
         <InfoRow label="User ID" value={tile.userId} />
-        <InfoRow label="Job PID" value={lastRun?.jobPid ?? '—'} />
+        <InfoRow label="Total Jobs" value={jobCounts.total || '—'} />
       </dl>
 
-      <div className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 px-3 py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${style.dot}`} />
-          <div className="min-w-0">
-            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${style.chip}`}>
-              {statusLabel()}
-            </span>
-          </div>
+      {/* Job Counts */}
+      {jobCounts.total > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <JobCountBadge
+            label="Running"
+            count={jobCounts.running}
+            color="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+          />
+          <JobCountBadge
+            label="Scheduled"
+            count={jobCounts.scheduled}
+            color="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+          />
+          <JobCountBadge
+            label="Completed"
+            count={jobCounts.completed}
+            color="bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300"
+          />
         </div>
-        {lastRun && (lastRun.status === 'polling' || lastRun.status === 'terminal') && (
-          <div className="flex divide-x divide-slate-200 dark:divide-slate-700 shrink-0">
-            <StatCounter label="Pass" value={lastRun.pass} tone="text-emerald-600 dark:text-emerald-400" />
-            <StatCounter label="Fail" value={lastRun.fail} tone="text-red-600 dark:text-red-400" />
-            <StatCounter label="N/R" value={lastRun.notRun} tone="text-slate-500" />
-          </div>
-        )}
-      </div>
-
-      {(lastRun?.status === 'trigger_error' || lastRun?.status === 'poll_error') && (
-        <p className="text-xs text-red-600 dark:text-red-400 -mt-2 line-clamp-2">
-          {lastRun.status === 'trigger_error'
-            ? lastRun.trigger?.error || `HTTP ${lastRun.trigger?.response?.status ?? ''} ${lastRun.trigger?.response?.statusText ?? ''}`
-            : lastRun.poll?.error || `HTTP ${lastRun.poll?.response?.status ?? ''} ${lastRun.poll?.response?.statusText ?? ''}`}
-        </p>
       )}
 
       <div className="flex items-center justify-between gap-2 pt-1">
         <div className="flex items-center gap-1.5">
-          {!isPolling ? (
-            <>
-              {lastRun?.jobPid && lastRun.status !== 'terminal' && lastRun.status !== 'triggering' && (
-                <button
-                  onClick={stop(() => onResume(tile))}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 text-white text-xs font-medium px-3 py-1.5 hover:bg-slate-800 transition-colors"
-                  title="Resume polling this job's status"
-                >
-                  <PlayIcon className="w-3.5 h-3.5" />
-                  Resume
-                </button>
-              )}
-              <button
-                onClick={stop(() => onRun(tile))}
-                disabled={isBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-              >
-                <PlayIcon className="w-3.5 h-3.5" />
-                {isBusy ? 'Running…' : lastRun ? 'Run Again' : 'Run'}
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={stop(() => onStop(tile))}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 text-white text-xs font-medium px-3 py-1.5 hover:bg-slate-800 transition-colors"
-            >
-              <StopIcon className="w-3.5 h-3.5" />
-              Stop
-            </button>
-          )}
-          {lastRun?.jobPid && (
-            <button
-              onClick={stop(() => onRefresh(tile))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-medium px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Refresh status now"
-            >
-              <RefreshIcon className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={stop(handleRun)}
+            disabled={isTriggering}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <PlayIcon className="w-3.5 h-3.5" />
+            {isTriggering ? 'Triggering…' : 'Run'}
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -152,9 +118,9 @@ export default function TileCard({ tile, onRun, onStop, onResume, onRefresh, onE
       </div>
 
       <div className="flex items-center justify-between text-[11px] text-slate-400 -mt-1">
-        <span>{lastRun?.lastUpdatedAt ? `Updated ${formatRelative(lastRun.lastUpdatedAt)}` : 'No activity'}</span>
+        <span>{lastActivity ? `Updated ${formatRelative(lastActivity)}` : 'No activity'}</span>
         <span className="inline-flex items-center gap-0.5 text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
-          Details <ChevronRightIcon className="w-3 h-3" />
+          View Jobs <ChevronRightIcon className="w-3 h-3" />
         </span>
       </div>
     </div>

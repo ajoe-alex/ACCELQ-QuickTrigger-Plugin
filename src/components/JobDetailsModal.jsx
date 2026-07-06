@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { CloseIcon, CopyIcon, EyeIcon, EyeOffIcon, ChevronRightIcon } from './Icons'
-import { formatDateTime, maskSecret } from '../utils/format'
+import { CloseIcon, CopyIcon, EyeIcon, EyeOffIcon, ChevronRightIcon, TrashIcon, PlayIcon, StopIcon, RefreshIcon } from './Icons'
+import { formatDateTime, formatDuration, formatRelative, maskSecret } from '../utils/format'
 import { buildTriggerRequest } from '../utils/api'
 import { buildCurlCommand } from '../utils/curl'
+import { getStatusStyle } from '../utils/statusStyles'
 import RunSummary, { TriggerResultCard } from './RunSummary'
 
 function CopyButton({ text }) {
@@ -24,70 +25,19 @@ function CopyButton({ text }) {
   )
 }
 
-function HeadersBlock({ headers, revealSecrets }) {
-  if (!headers) return null
-  return (
-    <div className="rounded-lg bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 px-3 py-2 space-y-1">
-      {Object.entries(headers).map(([key, value]) => {
-        const isSecret = /api_key|authorization|token/i.test(key)
-        return (
-          <div key={key} className="flex text-[12px] gap-2 font-mono">
-            <span className="text-slate-400 shrink-0">{key}:</span>
-            <span className="text-slate-700 dark:text-slate-300 break-all">
-              {isSecret ? maskSecret(String(value), revealSecrets) : String(value)}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function JsonBlock({ data }) {
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-  return (
-    <div className="relative rounded-lg bg-slate-900 dark:bg-black/40 border border-slate-800">
-      <div className="absolute top-1.5 right-2">
-        <CopyButton text={text} />
-      </div>
-      <pre className="text-[12px] text-emerald-300/90 p-3 pr-16 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all">
-        {text}
-      </pre>
-    </div>
-  )
-}
-
-function Section({ title, children, badge }) {
+function Section({ title, children, badge, actions }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{title}</h4>
-        {badge}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{title}</h4>
+          {badge}
+        </div>
+        {actions}
       </div>
       {children}
     </div>
   )
-}
-
-function Collapsible({ title, children }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-brand-600 transition-colors"
-      >
-        <ChevronRightIcon className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
-        {title}
-      </button>
-      {open && <div className="mt-2 space-y-2">{children}</div>}
-    </div>
-  )
-}
-
-function RequestLine({ request }) {
-  return <p className="text-[12px] font-mono text-slate-500 break-all">{request.method} {request.url}</p>
 }
 
 function CurlBlock({ tile, revealSecrets }) {
@@ -109,26 +59,138 @@ function CurlBlock({ tile, revealSecrets }) {
   )
 }
 
-function StatusPill({ ok, status, statusText }) {
-  const tone = ok
-    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900'
-    : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900'
+function JobTile({ job, onStop, onResume, onRefresh, onDelete }) {
+  const [expanded, setExpanded] = useState(false)
+  const style = getStatusStyle(job.rawStatus, job.status)
+  const isPolling = job.polling
+  const isTerminal = job.status === 'terminal' || job.status === 'trigger_error' || job.status === 'poll_error'
+  const canResume = job.jobPid && !isPolling && !isTerminal
+  const duration = job.completedAt && job.startedAt ? job.completedAt - job.startedAt : null
+
+  const statusLabel = () => {
+    if (job.status === 'triggering') return 'Triggering…'
+    if (job.status === 'trigger_error') return 'Trigger failed'
+    if (job.status === 'poll_error') return 'Poll failed'
+    return job.rawStatus || 'Pending'
+  }
+
   return (
-    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${tone}`}>
-      {status} {statusText}
-    </span>
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div
+        onClick={() => setExpanded(!expanded)}
+        className="cursor-pointer p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${style.dot}`} />
+              <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                Job #{job.jobPid || '—'}
+              </span>
+              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${style.chip}`}>
+                {statusLabel()}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+              <span>Started {formatRelative(job.startedAt)}</span>
+              {duration && <span>{formatDuration(duration)}</span>}
+              {job.pollCount > 0 && <span>Polls: {job.pollCount}</span>}
+            </div>
+          </div>
+
+          {/* Stats */}
+          {(job.pass != null || job.fail != null) && (
+            <div className="flex items-center gap-2 text-xs shrink-0">
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{job.pass ?? 0}</span>
+              <span className="text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-red-600 dark:text-red-400 font-semibold">{job.fail ?? 0}</span>
+              <span className="text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-slate-500 font-semibold">{job.notRun ?? 0}</span>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {isPolling && (
+              <button
+                onClick={() => onStop(job.id)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Stop polling"
+              >
+                <StopIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canResume && (
+              <button
+                onClick={() => onResume(job.id)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                title="Resume polling"
+              >
+                <PlayIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {job.jobPid && (
+              <button
+                onClick={() => onRefresh(job.id)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Refresh now"
+              >
+                <RefreshIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(job.id)}
+              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+              title="Delete job"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+            <ChevronRightIcon className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-slate-100 dark:border-slate-800 space-y-4">
+          {/* Trigger Result */}
+          {job.trigger && (
+            <div className="pt-3">
+              <p className="text-[11px] text-slate-400 uppercase tracking-wide font-medium mb-2">Trigger Result</p>
+              {job.trigger.error ? (
+                <p className="text-xs text-red-500">{job.trigger.error}</p>
+              ) : (
+                <TriggerResultCard body={job.trigger.response?.body} />
+              )}
+            </div>
+          )}
+
+          {/* Run Summary */}
+          {job.poll?.response?.body?.summary && (
+            <div>
+              <p className="text-[11px] text-slate-400 uppercase tracking-wide font-medium mb-2">Run Summary</p>
+              <RunSummary summary={job.poll.response.body.summary} />
+            </div>
+          )}
+
+          {job.poll?.error && (
+            <p className="text-xs text-red-500">{job.poll.error}</p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
-export default function JobDetailsModal({ tile, onClose }) {
+export default function JobDetailsModal({ tile, onClose, onRun, onStopJob, onResumeJob, onRefreshJob, onDeleteJob, onClearAllJobs }) {
   const [revealSecrets, setRevealSecrets] = useState(false)
-  const lastRun = tile.lastRun
+  const jobs = tile.jobs || []
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[85vh] flex flex-col"
+        className="w-full max-w-3xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[90vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div>
@@ -136,6 +198,10 @@ export default function JobDetailsModal({ tile, onClose }) {
               {tile.label || tile.projectName}
             </h2>
             <p className="text-xs text-slate-400">{tile.tenantCode} / {tile.projectName} · Template {tile.templateJobId}</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] text-slate-400 font-mono" title={tile.id}>ID: {tile.id}</span>
+              <CopyButton text={tile.id} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -153,8 +219,10 @@ export default function JobDetailsModal({ tile, onClose }) {
         </div>
 
         <div className="px-6 py-5 space-y-6 overflow-y-auto">
+          {/* Tile Config */}
           <Section title="Tile Configuration">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <ConfigRow label="Tile ID" value={tile.id} mono />
               <ConfigRow label="Base URL" value={tile.baseUrl} />
               <ConfigRow label="Tenant Code" value={tile.tenantCode} />
               <ConfigRow label="Project Name" value={tile.projectName} />
@@ -166,62 +234,55 @@ export default function JobDetailsModal({ tile, onClose }) {
             </dl>
           </Section>
 
+          {/* cURL */}
           <Section title="Trigger Job cURL">
             <CurlBlock tile={tile} revealSecrets={revealSecrets} />
           </Section>
 
-          {!lastRun && (
-            <p className="text-sm text-slate-400 italic">No runs have been triggered yet for this tile.</p>
-          )}
-
-          {lastRun?.trigger && (
-            <Section
-              title="Trigger Result"
-              badge={lastRun.trigger.response && (
-                <StatusPill ok={lastRun.trigger.response.ok} status={lastRun.trigger.response.status} statusText={lastRun.trigger.response.statusText} />
-              )}
-            >
-              <div className="space-y-2">
-                {lastRun.trigger.error ? (
-                  <p className="text-xs text-red-500">{lastRun.trigger.error}</p>
-                ) : (
-                  <TriggerResultCard body={lastRun.trigger.response?.body} />
+          {/* Jobs Section */}
+          <Section
+            title={`Triggered Jobs (${jobs.length})`}
+            actions={
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onRun(tile)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-brand-700 transition-colors"
+                >
+                  <PlayIcon className="w-3.5 h-3.5" />
+                  Run New Job
+                </button>
+                {jobs.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete all jobs from this tile?')) {
+                        onClearAllJobs(tile.id)
+                      }
+                    }}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Clear All
+                  </button>
                 )}
-                <p className="text-[11px] text-slate-400">{formatDateTime(lastRun.trigger.request.timestamp)}</p>
-                <Collapsible title="View request & raw response">
-                  <RequestLine request={lastRun.trigger.request} />
-                  <HeadersBlock headers={lastRun.trigger.request.headers} revealSecrets={revealSecrets} />
-                  {!lastRun.trigger.error && <JsonBlock data={lastRun.trigger.response?.body} />}
-                </Collapsible>
               </div>
-            </Section>
-          )}
-
-          {lastRun?.poll && (
-            <Section
-              title="Run Summary"
-              badge={lastRun.poll.response && (
-                <StatusPill ok={lastRun.poll.response.ok} status={lastRun.poll.response.status} statusText={lastRun.poll.response.statusText} />
-              )}
-            >
-              <div className="space-y-2">
-                {lastRun.poll.error ? (
-                  <p className="text-xs text-red-500">{lastRun.poll.error}</p>
-                ) : (
-                  <RunSummary summary={lastRun.poll.response?.body?.summary} />
-                )}
-                <p className="text-[11px] text-slate-400">
-                  Last checked {formatDateTime(lastRun.poll.request.timestamp)}
-                  {lastRun.pollCount ? ` · check #${lastRun.pollCount}` : ''}
-                </p>
-                <Collapsible title="View request & raw response">
-                  <RequestLine request={lastRun.poll.request} />
-                  <HeadersBlock headers={lastRun.poll.request.headers} revealSecrets={revealSecrets} />
-                  {!lastRun.poll.error && <JsonBlock data={lastRun.poll.response?.body} />}
-                </Collapsible>
+            }
+          >
+            {jobs.length === 0 ? (
+              <p className="text-sm text-slate-400 italic py-4 text-center">No jobs have been triggered yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {jobs.map((job) => (
+                  <JobTile
+                    key={job.id}
+                    job={job}
+                    onStop={(jobId) => onStopJob(tile.id, jobId)}
+                    onResume={(jobId) => onResumeJob(tile.id, jobId)}
+                    onRefresh={(jobId) => onRefreshJob(tile.id, jobId)}
+                    onDelete={(jobId) => onDeleteJob(tile.id, jobId)}
+                  />
+                ))}
               </div>
-            </Section>
-          )}
+            )}
+          </Section>
         </div>
       </div>
     </div>
